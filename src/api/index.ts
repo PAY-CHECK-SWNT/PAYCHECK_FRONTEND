@@ -1,3 +1,3 @@
 export * from './cliente'
-export { ApiError } from './errores'
+export { ApiError, MENSAJE_ERROR_DESCONOCIDO } from './errores'
 export type * from './tipos'

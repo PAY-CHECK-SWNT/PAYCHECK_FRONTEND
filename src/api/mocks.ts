@@ -1,4 +1,4 @@
-import { hoyBogota } from '../lib/fechas'
+import { hoyBogota, sumarDias } from '../lib/fechas'
 import { ApiError } from './errores'
 import type {
   ActualizarCicloBody,
@@ -18,11 +18,6 @@ let siguienteIdCiclo = 1
 let siguienteIdMovimiento = 1
 
 const espera = () => new Promise<void>((r) => setTimeout(r, RETRASO_MS))
-
-function sumarDias(iso: string, dias: number): string {
-  const [a, m, d] = iso.split('-').map(Number)
-  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10)
-}
 
 /** Hora actual en Bogotá con offset fijo -05:00 (Colombia no tiene horario de verano). */
 function ahoraBogota(): string {

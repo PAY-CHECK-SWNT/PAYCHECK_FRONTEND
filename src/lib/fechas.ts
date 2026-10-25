@@ -18,6 +18,12 @@ export function hoyBogota(): string {
   return `${partes.year}-${partes.month}-${partes.day}`
 }
 
+/** Suma días a una fecha "yyyy-MM-dd" sin depender de la zona local. */
+export function sumarDias(iso: string, dias: number): string {
+  const [a, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10)
+}
+
 /** "2026-11-03" → "3 de noviembre", sin pasar por Date. */
 export function formatearFecha(iso: string): string {
   const [, mes, dia] = iso.split('-').map(Number)
