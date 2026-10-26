@@ -1,21 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError, MENSAJE_ERROR_DESCONOCIDO, crearCiclo } from '../../api'
-import { hoyBogota, sumarDias } from '../../lib/fechas'
 import { formatearMilesInput, parsearMonto } from '../../lib/pesos'
+import CampoFechaIngreso from './CampoFechaIngreso'
+import { claseInput, limitesFechaIngreso, validarFechaIngreso } from './fechaIngreso'
 
 type Errores = { saldoInicial?: string; fechaProximoIngreso?: string }
 
 const CAMPOS_CONOCIDOS = ['saldoInicial', 'fechaProximoIngreso']
 
-const claseInput =
-  'w-full rounded-lg border border-slate-300 px-3 py-2 text-base disabled:bg-slate-100 disabled:text-slate-400'
-
 export default function Configurar() {
   const navigate = useNavigate()
-  const hoy = hoyBogota()
-  const min = sumarDias(hoy, 1)
-  const max = sumarDias(hoy, 62)
+  const { min, max } = limitesFechaIngreso()
 
   const [saldoTexto, setSaldoTexto] = useState('')
   const [fecha, setFecha] = useState('')
@@ -28,13 +24,8 @@ export default function Configurar() {
     const nuevos: Errores = {}
     const saldo = parsearMonto(saldoTexto)
     if (saldo === null) nuevos.saldoInicial = 'Es obligatorio.'
-    if (!noSe) {
-      if (!fecha) nuevos.fechaProximoIngreso = 'Elige la fecha de tu próximo ingreso.'
-      else if (fecha < min) nuevos.fechaProximoIngreso = 'Debe ser posterior a hoy.'
-      else if (fecha > max) {
-        nuevos.fechaProximoIngreso = 'Debe estar dentro de los próximos 62 días.'
-      }
-    }
+    const errorFecha = validarFechaIngreso(fecha, noSe, min, max)
+    if (errorFecha) nuevos.fechaProximoIngreso = errorFecha
     return { errores: nuevos, saldo }
   }
 
@@ -109,46 +100,18 @@ export default function Configurar() {
         )}
       </div>
 
-      <div className="space-y-1">
-        <label htmlFor="fecha" className="block text-sm font-medium">
-          ¿Cuándo llega tu próximo ingreso?
-        </label>
-        <input
-          id="fecha"
-          type="date"
-          min={min}
-          max={max}
-          value={noSe ? '' : fecha}
-          disabled={noSe}
-          onChange={(e) => setFecha(e.target.value)}
-          aria-invalid={!!errores.fechaProximoIngreso}
-          aria-describedby={errores.fechaProximoIngreso ? 'fecha-error' : undefined}
-          className={claseInput}
-        />
-        {errores.fechaProximoIngreso && (
-          <p id="fecha-error" role="alert" className="text-sm text-red-700">
-            {errores.fechaProximoIngreso}
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-1">
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={noSe}
-            onChange={(e) => {
-              setNoSe(e.target.checked)
-              setErrores((prev) => ({ ...prev, fechaProximoIngreso: undefined }))
-            }}
-            className="h-5 w-5"
-          />
-          No sé cuándo llega mi próximo ingreso
-        </label>
-        {noSe && (
-          <p className="text-sm text-slate-500">Usaremos una fecha estimada (30 días).</p>
-        )}
-      </div>
+      <CampoFechaIngreso
+        fecha={fecha}
+        noSe={noSe}
+        min={min}
+        max={max}
+        error={errores.fechaProximoIngreso}
+        onFecha={setFecha}
+        onNoSe={(v) => {
+          setNoSe(v)
+          setErrores((prev) => ({ ...prev, fechaProximoIngreso: undefined }))
+        }}
+      />
 
       <button
         type="submit"

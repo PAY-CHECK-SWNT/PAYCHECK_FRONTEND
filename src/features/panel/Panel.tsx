@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { ApiError, listarMovimientos, obtenerResumen } from '../../api'
 import type { Movimiento, Resumen } from '../../api'
@@ -22,17 +22,20 @@ function Cifra({
   valor,
   explicacion,
   rojo = false,
+  accion,
 }: {
   titulo: string
   valor: string
   explicacion: string
   rojo?: boolean
+  accion?: ReactNode
 }) {
   return (
     <div className="rounded-lg bg-white p-3 shadow-sm">
       <p className="text-sm text-slate-500">{titulo}</p>
       <p className={`text-xl font-semibold ${rojo ? 'text-red-700' : 'text-slate-900'}`}>{valor}</p>
       <p className="text-xs text-slate-500">{explicacion}</p>
+      {accion}
     </div>
   )
 }
@@ -130,6 +133,11 @@ export default function Panel() {
           explicacion={`Hasta tu próximo ingreso, el ${formatearFecha(r.fechaProximoIngreso)}${
             r.fechaEstimada ? ' (fecha estimada)' : ''
           }`}
+          accion={
+            <Link to="/ciclo/fecha" className="mt-1 inline-block text-xs font-medium underline">
+              Cambiar fecha
+            </Link>
+          }
         />
       </div>
 
@@ -144,7 +152,15 @@ export default function Panel() {
                   : 'bg-amber-50 text-amber-900'
               }`}
             >
-              {a.mensaje}
+              <p>{a.mensaje}</p>
+              {a.codigo === 'CICLO_VENCIDO' && (
+                <Link
+                  to="/ciclo/fecha"
+                  className="mt-2 inline-block rounded-lg bg-amber-900 px-3 py-1.5 font-medium text-white"
+                >
+                  Actualizar fecha
+                </Link>
+              )}
             </li>
           ))}
         </ul>
