@@ -36,7 +36,8 @@ export interface CrearCicloBody {
 }
 
 export interface ActualizarCicloBody {
-  fechaProximoIngreso: string
+  /** null o ausente = "No sé": el backend usa hoy + 30 días. */
+  fechaProximoIngreso?: string | null
 }
 
 export interface Movimiento {

@@ -27,11 +27,12 @@ export default function Configurar() {
   function validar(): { errores: Errores; saldo: number | null } {
     const nuevos: Errores = {}
     const saldo = parsearMonto(saldoTexto)
-    if (saldo === null) nuevos.saldoInicial = 'Ingresa un monto válido (0 o más).'
+    if (saldo === null) nuevos.saldoInicial = 'Es obligatorio.'
     if (!noSe) {
       if (!fecha) nuevos.fechaProximoIngreso = 'Elige la fecha de tu próximo ingreso.'
-      else if (fecha < min || fecha > max) {
-        nuevos.fechaProximoIngreso = 'La fecha debe ser desde mañana hasta dentro de 62 días.'
+      else if (fecha < min) nuevos.fechaProximoIngreso = 'Debe ser posterior a hoy.'
+      else if (fecha > max) {
+        nuevos.fechaProximoIngreso = 'Debe estar dentro de los próximos 62 días.'
       }
     }
     return { errores: nuevos, saldo }

@@ -5,6 +5,7 @@
 ## Convenciones
 - Base: `/api`. JSON en camelCase.
 - Dinero: pesos enteros (`15000`). Fechas: `"2026-10-25"` (zona America/Bogota).
+- Un monto con decimales (`1.5`) responde `400 VALIDACION` sin `campos`, igual que un JSON mal formado (decidido en PC-08).
 - Sprint 1: sin token; el backend asocia todo al usuario demo (perfil `dev`).
   Sprint 2: header `Authorization: Bearer <jwt>`; sin token → 401 `NO_AUTENTICADO`.
 
@@ -48,6 +49,17 @@ La categoría debe corresponder al tipo; si no, 400.
 
 `201` → Ciclo · `400 VALIDACION` · `409 CICLO_ACTIVO_EXISTENTE`
 
+Mensajes de `campos` (decididos en PC-08):
+
+| Campo | Cuándo | Mensaje |
+|---|---|---|
+| `saldoInicial` | Falta o es null | Es obligatorio. |
+| `saldoInicial` | `< 0` | No puede ser negativo. |
+| `fechaProximoIngreso` | `≤ hoy` | Debe ser posterior a hoy. |
+| `fechaProximoIngreso` | `> hoy + 62` | Debe estar dentro de los próximos 62 días. |
+
+`409 CICLO_ACTIVO_EXISTENTE` → "Ya tienes un ciclo activo."
+
 Ciclo:
 ```json
 {
@@ -61,13 +73,15 @@ Ciclo:
 ```
 
 ### GET /api/ciclos/activo
-`200` → Ciclo · `404 NO_ENCONTRADO` (la app lleva a "Configura tu ciclo")
+`200` → Ciclo · `404 NO_ENCONTRADO` "No tienes un ciclo activo." (la app lleva a "Configura tu ciclo")
 
 ### PATCH /api/ciclos/activo
 ```json
 { "fechaProximoIngreso": "2026-11-05" }
 ```
-Mismas validaciones de fecha. `200` → Ciclo · `400` · `404`
+Mismas validaciones y mensajes de fecha que en POST, incluido `null` (o sin el campo) → hoy + 30 días y
+`fechaEstimada: true`. Una fecha concreta deja `fechaEstimada: false`.
+`200` → Ciclo · `400` · `404` "No tienes un ciclo activo."
 
 ### POST /api/movimientos
 ```json
@@ -79,10 +93,31 @@ Mismas validaciones de fecha. `200` → Ciclo · `400` · `404`
   "descripcion": "Almuerzo"
 }
 ```
-- `monto > 0`. `fecha` opcional (por defecto hoy), no puede ser futura. `descripcion` opcional, máximo 140 caracteres.
+- `monto > 0`. `fecha` opcional (por defecto hoy), no puede ser futura ni anterior a `fechaInicio` del ciclo activo.
+  `descripcion` opcional, máximo 140 caracteres; se recorta y vacía queda `null`.
+- La categoría debe corresponder al tipo.
 - Se asigna al ciclo activo con `origen: "MANUAL"`.
 
 `201` → Movimiento · `400 VALIDACION` · `409 SIN_CICLO_ACTIVO`
+
+Mensajes de `campos` (decididos en PC-11):
+
+| Campo | Cuándo | Mensaje |
+|---|---|---|
+| `tipo`, `monto`, `categoria` | Falta o es null | Es obligatorio. |
+| `monto` | `≤ 0` | Debe ser mayor que 0. |
+| `categoria` | No corresponde al tipo | No corresponde al tipo de movimiento. |
+| `fecha` | `> hoy` | No puede ser futura. |
+| `fecha` | `< fechaInicio` del ciclo | No puede ser anterior al inicio de tu ciclo. |
+| `descripcion` | Más de 140 caracteres | Máximo 140 caracteres. |
+
+Un `tipo` o `categoria` que no existe responde `400 VALIDACION` sin `campos`, como un monto con decimales.
+Los datos se validan antes que el ciclo: un cuerpo inválido sin ciclo activo responde 400, no 409
+(excepto la regla de `fechaInicio`, que necesita el ciclo).
+
+`409 SIN_CICLO_ACTIVO` → "Primero configura tu ciclo." (también en GET /api/movimientos)
+
+`creadoEn` se responde en segundos, con la zona de Bogotá.
 
 Movimiento:
 ```json

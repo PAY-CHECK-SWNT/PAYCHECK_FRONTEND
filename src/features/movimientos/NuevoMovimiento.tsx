@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ApiError,
   MENSAJE_ERROR_DESCONOCIDO,
   crearMovimiento,
+  obtenerCicloActivo,
   type Categoria,
   type TipoMovimiento,
 } from '../../api'
@@ -29,9 +30,29 @@ export default function NuevoMovimiento() {
   const [montoTexto, setMontoTexto] = useState('')
   const [fecha, setFecha] = useState(hoy)
   const [descripcion, setDescripcion] = useState('')
+  const [fechaInicio, setFechaInicio] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [errorGeneral, setErrorGeneral] = useState<string[]>([])
   const [errores, setErrores] = useState<Errores>({})
+
+  useEffect(() => {
+    let activo = true
+    obtenerCicloActivo()
+      .then((ciclo) => {
+        if (activo) setFechaInicio(ciclo.fechaInicio)
+      })
+      .catch((err) => {
+        if (!activo) return
+        if (err instanceof ApiError && err.status === 404) {
+          navigate('/configurar')
+          return
+        }
+        setErrorGeneral([err instanceof ApiError ? err.mensaje : MENSAJE_ERROR_DESCONOCIDO])
+      })
+    return () => {
+      activo = false
+    }
+  }, [navigate])
 
   const categorias: Categoria[] = tipo === 'GASTO' ? CATEGORIAS_GASTO : CATEGORIAS_INGRESO
 
@@ -45,10 +66,14 @@ export default function NuevoMovimiento() {
   function validar(): { errores: Errores; monto: number | null } {
     const nuevos: Errores = {}
     const monto = parsearMonto(montoTexto)
-    if (monto === null || monto <= 0) nuevos.monto = 'Ingresa un monto mayor que 0.'
-    if (!categoria) nuevos.categoria = 'Elige una categoría.'
+    if (monto === null) nuevos.monto = 'Es obligatorio.'
+    else if (monto <= 0) nuevos.monto = 'Debe ser mayor que 0.'
+    if (!categoria) nuevos.categoria = 'Es obligatorio.'
     if (!fecha) nuevos.fecha = 'Elige una fecha.'
-    else if (fecha > hoy) nuevos.fecha = 'La fecha no puede ser futura.'
+    else if (fecha > hoy) nuevos.fecha = 'No puede ser futura.'
+    else if (fechaInicio && fecha < fechaInicio) {
+      nuevos.fecha = 'No puede ser anterior al inicio de tu ciclo.'
+    }
     return { errores: nuevos, monto }
   }
 
@@ -198,6 +223,7 @@ export default function NuevoMovimiento() {
         <input
           id="fecha"
           type="date"
+          min={fechaInicio ?? undefined}
           max={hoy}
           value={fecha}
           onChange={(e) => setFecha(e.target.value)}
@@ -239,7 +265,7 @@ export default function NuevoMovimiento() {
 
       <button
         type="submit"
-        disabled={enviando}
+        disabled={enviando || !fechaInicio}
         className="w-full rounded-lg bg-slate-900 px-4 py-3 text-base font-medium text-white disabled:opacity-60"
       >
         {enviando ? 'Guardando…' : 'Guardar movimiento'}

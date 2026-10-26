@@ -1,7 +1,9 @@
+import { CATEGORIAS_GASTO, CATEGORIAS_INGRESO } from '../lib/categorias'
 import { hoyBogota, sumarDias } from '../lib/fechas'
 import { ApiError } from './errores'
 import type {
   ActualizarCicloBody,
+  Categoria,
   Ciclo,
   CrearCicloBody,
   CrearMovimientoBody,
@@ -26,8 +28,27 @@ function ahoraBogota(): string {
 }
 
 function requerirCiclo(): Ciclo {
-  if (!ciclo) throw new ApiError(404, 'NO_ENCONTRADO', 'No hay un ciclo activo.')
+  if (!ciclo) throw new ApiError(404, 'NO_ENCONTRADO', 'No tienes un ciclo activo.')
   return ciclo
+}
+
+function errorValidacion(campos: Record<string, string>): ApiError {
+  return new ApiError(400, 'VALIDACION', 'Revisa los datos del formulario.', campos)
+}
+
+/** Resuelve la fecha del próximo ingreso: null/ausente → hoy + 30 y estimada. */
+function resolverFechaProximoIngreso(
+  fecha: string | null | undefined,
+  hoy: string,
+): { fechaProximoIngreso: string; fechaEstimada: boolean } {
+  if (fecha == null) return { fechaProximoIngreso: sumarDias(hoy, 30), fechaEstimada: true }
+  const campos: Record<string, string> = {}
+  if (fecha <= hoy) campos.fechaProximoIngreso = 'Debe ser posterior a hoy.'
+  else if (fecha > sumarDias(hoy, 62)) {
+    campos.fechaProximoIngreso = 'Debe estar dentro de los próximos 62 días.'
+  }
+  if (Object.keys(campos).length > 0) throw errorValidacion(campos)
+  return { fechaProximoIngreso: fecha, fechaEstimada: false }
 }
 
 function requerirCicloParaMovimientos(): Ciclo {
@@ -66,12 +87,22 @@ export const mocks = {
       throw new ApiError(409, 'CICLO_ACTIVO_EXISTENTE', 'Ya tienes un ciclo activo.')
     }
     const hoy = hoyBogota()
+    const campos: Record<string, string> = {}
+    if (body.saldoInicial == null) campos.saldoInicial = 'Es obligatorio.'
+    else if (body.saldoInicial < 0) campos.saldoInicial = 'No puede ser negativo.'
+    let proximo: ReturnType<typeof resolverFechaProximoIngreso> | undefined
+    try {
+      proximo = resolverFechaProximoIngreso(body.fechaProximoIngreso, hoy)
+    } catch (err) {
+      if (!(err instanceof ApiError)) throw err
+      Object.assign(campos, err.campos)
+    }
+    if (Object.keys(campos).length > 0 || !proximo) throw errorValidacion(campos)
     ciclo = {
       id: siguienteIdCiclo++,
       saldoInicial: body.saldoInicial,
       fechaInicio: hoy,
-      fechaProximoIngreso: body.fechaProximoIngreso ?? sumarDias(hoy, 30),
-      fechaEstimada: body.fechaProximoIngreso === null,
+      ...proximo,
       estado: 'ACTIVO',
     }
     return { ...ciclo }
@@ -84,24 +115,42 @@ export const mocks = {
 
   async actualizarCicloActivo(body: ActualizarCicloBody): Promise<Ciclo> {
     await espera()
+    const actual = requerirCiclo()
     ciclo = {
-      ...requerirCiclo(),
-      fechaProximoIngreso: body.fechaProximoIngreso,
-      fechaEstimada: false,
+      ...actual,
+      ...resolverFechaProximoIngreso(body.fechaProximoIngreso, hoyBogota()),
     }
     return { ...ciclo }
   },
 
   async crearMovimiento(body: CrearMovimientoBody): Promise<Movimiento> {
     await espera()
-    requerirCicloParaMovimientos()
+    const hoy = hoyBogota()
+    const fecha = body.fecha ?? hoy
+    const descripcion = body.descripcion?.trim() || null
+    const campos: Record<string, string> = {}
+    if (body.monto == null) campos.monto = 'Es obligatorio.'
+    else if (body.monto <= 0) campos.monto = 'Debe ser mayor que 0.'
+    const validas: Categoria[] = body.tipo === 'GASTO' ? CATEGORIAS_GASTO : CATEGORIAS_INGRESO
+    if (body.categoria == null) campos.categoria = 'Es obligatorio.'
+    else if (!validas.includes(body.categoria)) {
+      campos.categoria = 'No corresponde al tipo de movimiento.'
+    }
+    if (fecha > hoy) campos.fecha = 'No puede ser futura.'
+    if (descripcion && descripcion.length > 140) campos.descripcion = 'Máximo 140 caracteres.'
+    // Los datos se validan antes que el ciclo (400 antes que 409).
+    if (Object.keys(campos).length > 0) throw errorValidacion(campos)
+    const cicloActivo = requerirCicloParaMovimientos()
+    if (fecha < cicloActivo.fechaInicio) {
+      throw errorValidacion({ fecha: 'No puede ser anterior al inicio de tu ciclo.' })
+    }
     const movimiento: Movimiento = {
       id: siguienteIdMovimiento++,
       tipo: body.tipo,
       monto: body.monto,
       categoria: body.categoria,
-      fecha: body.fecha ?? hoyBogota(),
-      descripcion: body.descripcion ?? null,
+      fecha,
+      descripcion,
       origen: 'MANUAL',
       creadoEn: ahoraBogota(),
     }
